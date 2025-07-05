@@ -108,11 +108,23 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/medidor')
       console.log('⚠️ Error verificando servicio de email:', error.message);
     }
     
-    app.listen(PORT, () => {
-      console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-      console.log(`📧 Email provider: ${process.env.EMAIL_PROVIDER || 'development'}`);
-      console.log(`🔒 Rate limiting activado`);
-    });
+    // Agregar manejo de errores más detallado para el inicio del servidor
+    const server = app.listen(PORT)
+      .on('error', (error) => {
+        if (error.code === 'EADDRINUSE') {
+          console.error(`⚠️ Error: El puerto ${PORT} está en uso.`);
+          console.error('Detalles del error:', error);
+          process.exit(1);
+        } else {
+          console.error('Error al iniciar el servidor:', error);
+          process.exit(1);
+        }
+      })
+      .on('listening', () => {
+        console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+        console.log(`📧 Email provider: ${process.env.EMAIL_PROVIDER || 'development'}`);
+        console.log(`🔒 Rate limiting activado`);
+      });
   })
   .catch(err => {
     console.error('Error al conectar a MongoDB:', err);

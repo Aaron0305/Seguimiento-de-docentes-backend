@@ -61,8 +61,12 @@
     // @route   GET /api/users
     // @access  Private/Admin
     export const getAllUsers = asyncHandler(async (req, res) => {
-    const users = await User.find({});
-    res.json(users);
+    const users = await User.find({})
+        .select('numeroControl nombre apellidoPaterno apellidoMaterno email carrera fotoPerfil')
+        .populate('carrera', 'nombre')
+        .lean();
+
+    res.json({ users });
     });
 
     // @desc    Eliminar usuario

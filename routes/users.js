@@ -5,10 +5,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import User from '../models/User.js';
 import { uploadProfile } from '../middleware/profileUploadMiddleware.js';
+import { getAllUsers } from '../controllers/userController.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const router = express.Router();
+
+// Ruta para obtener todos los usuarios
+router.get('/', getAllUsers);
 
 // Endpoint para servir imágenes de perfil
 router.get('/profile-image/:userId', async (req, res) => {

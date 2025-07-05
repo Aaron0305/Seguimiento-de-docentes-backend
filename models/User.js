@@ -33,7 +33,8 @@ const userSchema = new mongoose.Schema({
   },
   semestre: {
     type: Number,
-    required: true
+    required: false,
+    default: 1
   },
   password: {
     type: String,

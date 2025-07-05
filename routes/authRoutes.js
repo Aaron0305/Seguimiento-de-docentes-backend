@@ -4,16 +4,11 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { uploadProfile } from '../middleware/profileUploadMiddleware.js';
 import emailService from '../services/emailService.js';
-import { 
-  authLimiter, 
-  passwordResetLimiter, 
-  passwordChangeLimit 
-} from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
-// Ruta de registro con rate limiting
-router.post('/register', authLimiter, uploadProfile, async (req, res) => {  try {
+// Ruta de registro sin rate limiting
+router.post('/register', uploadProfile, async (req, res) => {  try {
     const { 
       email, 
       password, 
@@ -88,9 +83,8 @@ router.post('/register', authLimiter, uploadProfile, async (req, res) => {  try 
   }
 });
 
-// Ruta de login
-// Ruta de login con rate limiting
-router.post('/login', authLimiter, async (req, res) => {
+// Ruta de login sin rate limiting
+router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -180,8 +174,8 @@ router.get('/verify', async (req, res) => {
   }
 });
 
-// Ruta para solicitar recuperación de contraseña con rate limiting y email
-router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
+// Ruta para solicitar recuperación de contraseña sin rate limiting
+router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -265,7 +259,7 @@ router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
 });
 
 // Ruta para restablecer contraseña con rate limiting y confirmación por email
-router.post('/reset-password', passwordChangeLimit, async (req, res) => {
+router.post('/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
