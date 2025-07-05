@@ -3,11 +3,17 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { uploadProfile } from '../middleware/profileUploadMiddleware.js';
+import emailService from '../services/emailService.js';
+import { 
+  authLimiter, 
+  passwordResetLimiter, 
+  passwordChangeLimit 
+} from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
-// Ruta de registro
-router.post('/register', uploadProfile, async (req, res) => {  try {
+// Ruta de registro con rate limiting
+router.post('/register', authLimiter, uploadProfile, async (req, res) => {  try {
     const { 
       email, 
       password, 
@@ -83,7 +89,8 @@ router.post('/register', uploadProfile, async (req, res) => {  try {
 });
 
 // Ruta de login
-router.post('/login', async (req, res) => {
+// Ruta de login con rate limiting
+router.post('/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -169,6 +176,175 @@ router.get('/verify', async (req, res) => {
     res.status(401).json({
       success: false,
       message: 'Token inválido'
+    });
+  }
+});
+
+// Ruta para solicitar recuperación de contraseña con rate limiting y email
+router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'El correo electrónico es requerido'
+      });
+    }
+
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Por favor ingresa un correo electrónico válido'
+      });
+    }
+
+    const user = await User.findOne({ email }).populate('carrera', 'nombre');
+
+    if (!user) {
+      // Por seguridad, no revelamos si el email existe o no
+      return res.json({
+        success: true,
+        message: 'Si existe una cuenta con ese correo electrónico, recibirás un enlace de recuperación en breve.'
+      });
+    }
+
+    // Generar token de recuperación (válido por 1 hora)
+    const resetToken = jwt.sign(
+      { id: user._id, type: 'password-reset' },
+      process.env.JWT_SECRET || 'tu_jwt_secret',
+      { expiresIn: '1h' }
+    );
+
+    // Actualizar usuario con el token de reset
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hora
+    await user.save();
+
+    // Enviar email de recuperación
+    try {
+      await emailService.sendPasswordResetEmail(email, resetToken, user);
+      
+      console.log(`✅ Solicitud de recuperación procesada para: ${email}`);
+      
+      res.json({
+        success: true,
+        message: 'Si existe una cuenta con ese correo electrónico, recibirás un enlace de recuperación en breve.',
+        // En desarrollo, mostrar información adicional
+        ...(process.env.NODE_ENV === 'development' && {
+          dev_info: {
+            resetToken,
+            resetUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`
+          }
+        })
+      });
+
+    } catch (emailError) {
+      console.error('❌ Error enviando email de recuperación:', emailError);
+      
+      // Limpiar token si el email falla
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpires = undefined;
+      await user.save();
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error al enviar el correo de recuperación. Inténtalo de nuevo más tarde.'
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Error en forgot-password:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor'
+    });
+  }
+});
+
+// Ruta para restablecer contraseña con rate limiting y confirmación por email
+router.post('/reset-password', passwordChangeLimit, async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token y nueva contraseña son requeridos'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'La contraseña debe tener al menos 6 caracteres'
+      });
+    }
+
+    // Verificar el token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_jwt_secret');
+    
+    if (decoded.type !== 'password-reset') {
+      return res.status(400).json({
+        success: false,
+        message: 'Token inválido'
+      });
+    }
+
+    const user = await User.findById(decoded.id).populate('carrera', 'nombre');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado'
+      });
+    }
+
+    // Verificar que el token coincida y no haya expirado
+    if (user.resetPasswordToken !== token || user.resetPasswordExpires < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token de recuperación inválido o expirado'
+      });
+    }
+
+    // Encriptar la nueva contraseña
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Actualizar la contraseña y limpiar campos de reset
+    user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    // Enviar email de confirmación de cambio
+    try {
+      await emailService.sendPasswordChangeConfirmation(user.email, user);
+      console.log(`✅ Contraseña restablecida y email de confirmación enviado para: ${user.email}`);
+    } catch (emailError) {
+      console.error('⚠️ Error enviando email de confirmación:', emailError);
+      // No fallar la operación por esto
+    }
+
+    res.json({
+      success: true,
+      message: 'Contraseña restablecida exitosamente. Se ha enviado una confirmación a tu correo electrónico.'
+    });
+
+  } catch (error) {
+    console.error('❌ Error en reset-password:', error);
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Token inválido o expirado'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor'
     });
   }
 });

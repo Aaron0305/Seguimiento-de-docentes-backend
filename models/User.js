@@ -46,6 +46,14 @@ const userSchema = new mongoose.Schema({
   fotoPerfil: {
     type: String,
     default: null
+  },
+  resetPasswordToken: {
+    type: String,
+    default: null
+  },
+  resetPasswordExpires: {
+    type: Date,
+    default: null
   }
 });
 

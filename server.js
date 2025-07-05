@@ -2,6 +2,14 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+
+// ⚠️ IMPORTANTE: Cargar variables de entorno ANTES de cualquier otra importación
+dotenv.config();
+console.log('🔧 Variables de entorno cargadas:');
+console.log('📧 EMAIL_PROVIDER:', process.env.EMAIL_PROVIDER);
+console.log('🌍 NODE_ENV:', process.env.NODE_ENV);
+console.log('🎯 PORT:', process.env.PORT);
+
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { uploadConfig } from './config/upload.js';
@@ -11,11 +19,13 @@ import dailyRecordRoutes from './routes/dailyRecordRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import semestresRoutes from './routes/semestres.js';
 import Semestre from './models/Semestre.js';
+import { generalLimiter } from './middleware/rateLimiter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config();
+// Importar emailService DESPUÉS de cargar las variables de entorno
+import emailService from './services/emailService.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -31,13 +41,19 @@ app.use((req, res, next) => {
 
 // Configuración CORS unificada
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: [
+    process.env.CLIENT_URL || 'http://localhost:5173',
+    'http://localhost:5174' // Puerto alternativo de Vite
+  ],
   credentials: true
 }));
 
 // Configuraciones básicas
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Rate limiting general
+app.use(generalLimiter);
 
 // Servir archivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -76,10 +92,26 @@ async function initializeSemestres() {
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/medidor')
   .then(async () => {
     console.log('Conectado a MongoDB');
+    
     // Inicializar semestres después de conectar a la base de datos
     await initializeSemestres();
+    
+    // Verificar configuración del servicio de email
+    try {
+      const emailStatus = await emailService.verifyConnection();
+      if (emailStatus) {
+        console.log('✅ Servicio de email configurado y listo');
+      } else {
+        console.log('⚠️ Servicio de email no configurado - usando modo desarrollo');
+      }
+    } catch (error) {
+      console.log('⚠️ Error verificando servicio de email:', error.message);
+    }
+    
     app.listen(PORT, () => {
-      console.log(`Servidor corriendo en puerto ${PORT}`);
+      console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+      console.log(`📧 Email provider: ${process.env.EMAIL_PROVIDER || 'development'}`);
+      console.log(`🔒 Rate limiting activado`);
     });
   })
   .catch(err => {
