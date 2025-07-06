@@ -12,7 +12,7 @@ export const verifyToken = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_secreto_seguro');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_jwt_secret');
     
     // Obtener el usuario completo de la base de datos
     const user = await User.findById(decoded.id).select('-password');
@@ -45,3 +45,6 @@ export const isAdmin = async (req, res, next) => {
     res.status(500).json({ message: 'Error al verificar permisos' });
   }
 };
+
+// Alias para compatibilidad
+export const auth = verifyToken;

@@ -1,14 +1,14 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { auth } = require('../middleware/auth');
-const { upload, handleMulterError } = require('../middleware/uploadMiddleware');
-const {
+import { auth } from '../middleware/auth.js';
+import { upload, handleMulterError } from '../middleware/uploadMiddleware.js';
+import {
     createAssignment,
     getAllAssignments,
     getUserAssignments,
     submitAssignmentResponse,
     updateAssignmentStatus
-} = require('../controllers/assignmentController');
+} from '../controllers/assignmentController.js';
 
 // Rutas para administradores
 router.post('/', 
@@ -16,6 +16,21 @@ router.post('/',
     upload.array('attachments', 5),
     handleMulterError,
     createAssignment
+);
+
+// Ruta temporal sin autenticación para pruebas
+router.post('/test', 
+    upload.array('attachments', 5),
+    handleMulterError,
+    async (req, res) => {
+        try {
+            // Simular usuario admin para la prueba
+            req.user = { _id: '686adb66894909cadb9449bf' };
+            await createAssignment(req, res);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }
 );
 
 router.get('/all', auth, getAllAssignments);
@@ -30,4 +45,4 @@ router.post('/:id/submit',
     submitAssignmentResponse
 );
 
-module.exports = router; 
+export default router; 

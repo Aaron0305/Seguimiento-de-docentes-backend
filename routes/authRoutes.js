@@ -51,7 +51,7 @@ router.post('/register', uploadProfile, async (req, res) => {  try {
     const token = jwt.sign(
       { id: savedUser._id },
       process.env.JWT_SECRET || 'tu_jwt_secret',
-      { expiresIn: '24h' }
+      { expiresIn: '7d' } // Aumentado a 7 días para debugging
     );
 
     const userResponse = {
@@ -107,7 +107,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET || 'tu_jwt_secret',
-      { expiresIn: '24h' }
+      { expiresIn: '7d' } // Aumentado a 7 días para debugging
     );
 
     const userResponse = {

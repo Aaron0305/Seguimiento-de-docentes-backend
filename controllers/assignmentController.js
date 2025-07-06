@@ -1,10 +1,10 @@
-const Assignment = require('../models/Assignment');
-const User = require('../models/User');
-const path = require('path');
-const fs = require('fs');
+import Assignment from '../models/Assignment.js';
+import User from '../models/User.js';
+import path from 'path';
+import fs from 'fs';
 
 // Crear una nueva asignación
-exports.createAssignment = async (req, res) => {
+export const createAssignment = async (req, res) => {
     try {
         const { title, description, dueDate, isGeneral } = req.body;
         let assignedTo = req.body['assignedTo[]'] || req.body.assignedTo;
@@ -105,7 +105,7 @@ exports.createAssignment = async (req, res) => {
 };
 
 // Obtener todas las asignaciones (para admin)
-exports.getAllAssignments = async (req, res) => {
+export const getAllAssignments = async (req, res) => {
     try {
         const assignments = await Assignment.find()
             .populate('assignedTo', 'nombre apellidoPaterno apellidoMaterno email')
@@ -126,7 +126,7 @@ exports.getAllAssignments = async (req, res) => {
 };
 
 // Obtener asignaciones de un usuario específico
-exports.getUserAssignments = async (req, res) => {
+export const getUserAssignments = async (req, res) => {
     try {
         const assignments = await Assignment.find({
             assignedTo: req.user._id
@@ -148,7 +148,7 @@ exports.getUserAssignments = async (req, res) => {
 };
 
 // Subir respuesta a una asignación
-exports.submitAssignmentResponse = async (req, res) => {
+export const submitAssignmentResponse = async (req, res) => {
     try {
         const assignment = await Assignment.findById(req.params.id);
         
@@ -202,7 +202,7 @@ exports.submitAssignmentResponse = async (req, res) => {
 };
 
 // Actualizar estado de una asignación
-exports.updateAssignmentStatus = async (req, res) => {
+export const updateAssignmentStatus = async (req, res) => {
     try {
         const { status } = req.body;
         const assignment = await Assignment.findById(req.params.id);

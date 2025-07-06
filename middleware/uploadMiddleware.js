@@ -1,6 +1,6 @@
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 // Asegurar que el directorio de uploads existe
 const uploadDir = 'uploads';
@@ -79,7 +79,4 @@ const handleMulterError = (err, req, res, next) => {
     next(err);
 };
 
-module.exports = {
-    upload,
-    handleMulterError
-};
+export { upload, handleMulterError };

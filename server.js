@@ -18,6 +18,7 @@ import { router as carrerasRouter } from './routes/carreras.js';
 import dailyRecordRoutes from './routes/dailyRecordRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import semestresRoutes from './routes/semestres.js';
+import assignmentRoutes from './routes/assignmentRoutes.js';
 import Semestre from './models/Semestre.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
 
@@ -65,6 +66,7 @@ app.use('/api/carreras', carrerasRouter);
 app.use('/api/records', dailyRecordRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/semestres', semestresRoutes);
+app.use('/api/assignments', assignmentRoutes);
 
 // Función para inicializar semestres
 async function initializeSemestres() {
