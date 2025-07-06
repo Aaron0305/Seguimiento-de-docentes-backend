@@ -1,27 +1,85 @@
-import multer from 'multer';
-import { uploadConfig } from '../config/upload.js';
-import path from 'path';
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
+// Asegurar que el directorio de uploads existe
+const uploadDir = 'uploads';
+const evidenciasDir = path.join(uploadDir, 'evidencias');
+
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
+if (!fs.existsSync(evidenciasDir)) {
+    fs.mkdirSync(evidenciasDir);
+}
+
+// Configuración de almacenamiento
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/evidencias');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
+    destination: (req, file, cb) => {
+        cb(null, evidenciasDir);
+    },
+    filename: (req, file, cb) => {
+        // Sanitizar el nombre del archivo original
+        const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + sanitizedName);
+    }
 });
 
+// Filtro de archivos
 const fileFilter = (req, file, cb) => {
-  if (uploadConfig.allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Tipo de archivo no permitido'), false);
-  }
+    // Lista de tipos MIME permitidos
+    const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg',
+        'image/png',
+        'image/jpg',
+        'text/plain',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/x-asm',  // Para archivos .asm
+        'application/octet-stream' // Para tipos de archivo adicionales
+    ];
+
+    if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(new Error('Tipo de archivo no permitido. Solo se permiten PDF, DOC, DOCX, JPG, PNG, TXT, ASM y Excel.'), false);
+    }
 };
 
-export const upload = multer({
-  storage: storage,
-  limits: uploadConfig.limits,
-  fileFilter: fileFilter
+// Configuración de multer
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: 15 * 1024 * 1024, // 15MB máximo
+        files: 5 // máximo 5 archivos
+    }
 });
+
+// Middleware para manejar errores de multer
+const handleMulterError = (err, req, res, next) => {
+    if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({
+                success: false,
+                error: 'El archivo es demasiado grande. El tamaño máximo permitido es 15MB.'
+            });
+        }
+        if (err.code === 'LIMIT_FILE_COUNT') {
+            return res.status(400).json({
+                success: false,
+                error: 'Demasiados archivos. El máximo permitido es 5 archivos.'
+            });
+        }
+    }
+    next(err);
+};
+
+module.exports = {
+    upload,
+    handleMulterError
+};

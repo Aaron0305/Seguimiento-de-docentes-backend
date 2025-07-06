@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { auth } = require('../middleware/auth');
-const uploadMiddleware = require('../middleware/uploadMiddleware');
+const { upload, handleMulterError } = require('../middleware/uploadMiddleware');
 const {
     createAssignment,
     getAllAssignments,
@@ -11,12 +11,23 @@ const {
 } = require('../controllers/assignmentController');
 
 // Rutas para administradores
-router.post('/', auth, uploadMiddleware.array('attachments'), createAssignment);
+router.post('/', 
+    auth, 
+    upload.array('attachments', 5),
+    handleMulterError,
+    createAssignment
+);
+
 router.get('/all', auth, getAllAssignments);
 router.patch('/:id/status', auth, updateAssignmentStatus);
 
 // Rutas para docentes
 router.get('/my-assignments', auth, getUserAssignments);
-router.post('/:id/submit', auth, uploadMiddleware.array('files'), submitAssignmentResponse);
+router.post('/:id/submit', 
+    auth, 
+    upload.array('files', 5),
+    handleMulterError,
+    submitAssignmentResponse
+);
 
 module.exports = router; 
