@@ -2,6 +2,8 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import compression from 'compression';
+import helmet from 'helmet';
 
 // ⚠️ IMPORTANTE: Cargar variables de entorno ANTES de cualquier otra importación
 dotenv.config();
@@ -32,6 +34,24 @@ const PORT = process.env.PORT || 3001;
 
 // Asegurar que existan los directorios de uploads
 uploadConfig.createUploadDirs();
+
+// Middleware de seguridad y rendimiento
+app.use(helmet({
+  contentSecurityPolicy: false, // Permitir contenido dinámico
+  crossOriginEmbedderPolicy: false // Permitir recursos externos
+}));
+app.use(compression({
+  level: 6, // Nivel de compresión balanceado (1-9)
+  threshold: 1024, // Solo comprimir archivos > 1KB
+  filter: (req, res) => {
+    // No comprimir si el cliente no lo acepta
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    // Comprimir todo lo demás
+    return compression.filter(req, res);
+  }
+}));
 
 // Middleware para logging
 app.use((req, res, next) => {

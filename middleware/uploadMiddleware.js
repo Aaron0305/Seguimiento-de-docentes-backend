@@ -1,6 +1,10 @@
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Asegurar que el directorio de uploads existe
 const uploadDir = 'uploads';
@@ -50,13 +54,16 @@ const fileFilter = (req, file, cb) => {
     }
 };
 
-// Configuración de multer
+// Configuración de multer optimizada
 const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: 15 * 1024 * 1024, // 15MB máximo
-        files: 5 // máximo 5 archivos
+        fileSize: 5 * 1024 * 1024, // 5MB máximo (optimizado desde 15MB)
+        files: 3, // máximo 3 archivos (optimizado desde 5)
+        fieldSize: 1024 * 1024, // 1MB para campos de texto
+        fieldNameSize: 50, // máximo 50 caracteres para nombres de campo
+        fields: 10 // máximo 10 campos no-file
     }
 });
 
@@ -79,7 +86,4 @@ const handleMulterError = (err, req, res, next) => {
     next(err);
 };
 
-module.exports = {
-    upload,
-    handleMulterError
-};
+export { upload, handleMulterError };

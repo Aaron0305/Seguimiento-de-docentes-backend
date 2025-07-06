@@ -23,9 +23,10 @@ router.post('/register', uploadProfile, async (req, res) => {  try {
     // Guardar el nombre del archivo de la foto si se subió una
     const fotoPerfil = req.file ? req.file.filename : null;
 
+    // Optimización: consulta única con índices compuestos
     const userExists = await User.findOne({
       $or: [{ email }, { numeroControl }]
-    });
+    }).select('email numeroControl').lean(); // lean() para mejor performance
 
     if (userExists) {
       return res.status(400).json({
@@ -88,7 +89,10 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).populate('carrera', 'nombre');
+    // Optimización: usar índice compuesto email y cargar solo campos necesarios
+    const user = await User.findOne({ email })
+      .populate('carrera', 'nombre')
+      .select('+password'); // Explícitamente incluir password para verificación
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -195,7 +199,10 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email }).populate('carrera', 'nombre');
+    // Optimización: usar lean() para mejor performance y limitar campos
+    const user = await User.findOne({ email })
+      .populate('carrera', 'nombre')
+      .select('email nombre apellidoPaterno resetPasswordToken resetPasswordExpires');
 
     if (!user) {
       // Por seguridad, no revelamos si el email existe o no

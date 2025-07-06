@@ -14,7 +14,10 @@ const __dirname = path.dirname(__filename);
 class EmailService {
   constructor() {
     this.transporter = null;
-    // No inicializar inmediatamente, esperar a que se necesite
+    this.initialized = false;
+    this.initializationPromise = null;
+    // Cache para templates compilados
+    this.templateCache = new Map();
   }
 
   /**
@@ -147,22 +150,41 @@ class EmailService {
   }
 
   /**
-   * Asegura que el transportador esté inicializado
+   * Asegura que el transportador esté inicializado (optimizado con cache)
    */
-  ensureTransporter() {
-    if (!this.transporter) {
-      this.initializeTransporter();
+  async ensureTransporter() {
+    if (this.initialized && this.transporter) {
+      return this.transporter;
     }
+
+    // Si ya hay una inicialización en progreso, esperar a que termine
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    // Inicializar el transportador
+    this.initializationPromise = this.initializeTransporter();
+    await this.initializationPromise;
+    this.initialized = true;
+    this.initializationPromise = null;
+    
+    return this.transporter;
   }
 
   /**
-   * Compila un template de Handlebars con datos
+   * Compila un template de Handlebars con datos (optimizado con cache)
    * @param {string} templateName - Nombre del template
    * @param {object} data - Datos para el template
    * @returns {string} - HTML compilado
    */
   compileTemplate(templateName, data) {
     try {
+      // Verificar cache primero
+      if (this.templateCache.has(templateName)) {
+        const cachedTemplate = this.templateCache.get(templateName);
+        return cachedTemplate(data);
+      }
+
       const templatePath = path.join(__dirname, '../templates/emails', `${templateName}.hbs`);
       
       // Verificar si el archivo existe
@@ -173,6 +195,10 @@ class EmailService {
       
       const templateSource = fs.readFileSync(templatePath, 'utf8');
       const template = handlebars.compile(templateSource);
+      
+      // Guardar en cache
+      this.templateCache.set(templateName, template);
+      
       return template(data);
     } catch (error) {
       console.error('❌ Error compilando template:', error);
@@ -224,7 +250,7 @@ class EmailService {
    */
   async sendPasswordResetEmail(email, resetToken, user) {
     try {
-      this.ensureTransporter(); // Asegurar que el transportador esté inicializado
+      await this.ensureTransporter(); // Asegurar que el transportador esté inicializado
       const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
       
       const templateData = {
@@ -351,11 +377,11 @@ ${templateData.companyName}
   }
 
   /**
-   * Verifica la conexión del servicio de email
+   * Verifica la conexión del servicio de email (optimizado)
    */
   async verifyConnection() {
     try {
-      this.ensureTransporter(); // Asegurar que el transportador esté inicializado
+      await this.ensureTransporter(); // Asegurar que el transportador esté inicializado
       await this.transporter.verify();
       console.log('✅ Servicio de email configurado correctamente');
       return true;
