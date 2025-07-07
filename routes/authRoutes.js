@@ -63,7 +63,8 @@ router.post('/register', uploadProfile, async (req, res) => {  try {
       apellidoMaterno: savedUser.apellidoMaterno,
       carrera: savedUser.carrera,
       semestre: savedUser.semestre,
-      fotoPerfil: savedUser.fotoPerfil
+      fotoPerfil: savedUser.fotoPerfil,
+      role: savedUser.role
     };
 
     res.status(201).json({
@@ -118,7 +119,8 @@ router.post('/login', async (req, res) => {
       apellidoPaterno: user.apellidoPaterno,
       apellidoMaterno: user.apellidoMaterno,
       carrera: user.carrera,
-      semestre: user.semestre
+      semestre: user.semestre,
+      role: user.role
     };
 
     res.json({

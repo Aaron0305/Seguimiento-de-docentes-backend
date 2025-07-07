@@ -13,7 +13,11 @@ import {
     updateAssignmentStatus,
     getTeacherAssignmentStats,
     getTeacherFilteredAssignments,
-    markAssignmentCompleted
+    markAssignmentCompleted,
+    getPoorPerformanceReport,
+    getSubmissionStatistics,
+    sendPoorPerformanceReports,
+    sendAssignmentReminders
 } from '../controllers/assignmentController.js';
 
 // Rutas para administradores
@@ -23,6 +27,12 @@ router.post('/',
     handleMulterError,
     createAssignment
 );
+
+// Reportes y estadísticas (solo para administradores)
+router.get('/reports/poor-performance', auth, getPoorPerformanceReport);
+router.get('/reports/submission-statistics', auth, getSubmissionStatistics);
+router.post('/reports/send-poor-performance', auth, sendPoorPerformanceReports);
+router.post('/reports/send-reminders', auth, sendAssignmentReminders);
 
 // Ruta temporal sin autenticación para pruebas
 router.post('/test', 

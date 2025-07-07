@@ -14,6 +14,10 @@ const assignmentSchema = new mongoose.Schema({
         type: Date,
         required: true
     },
+    closeDate: {
+        type: Date,
+        required: true
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -35,6 +39,9 @@ const assignmentSchema = new mongoose.Schema({
         type: String,
         enum: ['pending', 'completed'],
         default: 'pending'
+    },
+    completedAt: {
+        type: Date
     },
     attachments: [{
         fileName: String,
@@ -60,6 +67,11 @@ const assignmentSchema = new mongoose.Schema({
         submittedAt: {
             type: Date,
             default: Date.now
+        },
+        submissionStatus: {
+            type: String,
+            enum: ['on-time', 'late', 'closed'],
+            default: 'on-time'
         },
         status: {
             type: String,

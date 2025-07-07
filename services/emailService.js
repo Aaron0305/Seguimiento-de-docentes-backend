@@ -351,6 +351,231 @@ ${templateData.companyName}
   }
 
   /**
+   * Envía un reporte de mal desempeño a un docente
+   */
+  async sendPoorPerformanceReport({ to, teacherName, assignments }) {
+    this.ensureTransporter();
+
+    const assignmentsList = assignments.map(assignment => `
+      <tr>
+        <td style="border: 1px solid #ddd; padding: 8px;">${assignment.title}</td>
+        <td style="border: 1px solid #ddd; padding: 8px;">${new Date(assignment.dueDate).toLocaleDateString('es-MX')}</td>
+        <td style="border: 1px solid #ddd; padding: 8px;">${new Date(assignment.closeDate).toLocaleDateString('es-MX')}</td>
+        <td style="border: 1px solid #ddd; padding: 8px; color: #d32f2f;">${assignment.status}</td>
+        <td style="border: 1px solid #ddd; padding: 8px; color: #d32f2f;">${assignment.daysPastDue} días</td>
+      </tr>
+    `).join('');
+
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Reporte de Desempeño - Asignaciones</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f44336; color: white; padding: 20px; text-align: center;">
+            <h1 style="margin: 0;">⚠️ Reporte de Desempeño Laboral</h1>
+          </div>
+          
+          <div style="padding: 20px; background-color: #f9f9f9;">
+            <p>Estimado/a <strong>${teacherName}</strong>,</p>
+            
+            <p>Le informamos que tiene <strong>${assignments.length}</strong> asignación(es) que han cerrado sin haber recibido su entrega correspondiente. 
+            Esto puede afectar su evaluación de desempeño laboral.</p>
+            
+            <h3 style="color: #d32f2f;">Asignaciones no entregadas:</h3>
+            
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+              <thead>
+                <tr style="background-color: #d32f2f; color: white;">
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Asignación</th>
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Fecha de Entrega</th>
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Fecha de Cierre</th>
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Estado</th>
+                  <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Días de Retraso</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${assignmentsList}
+              </tbody>
+            </table>
+            
+            <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0;">
+              <h4 style="color: #856404; margin-top: 0;">⚠️ Importante:</h4>
+              <ul style="color: #856404;">
+                <li>Las asignaciones cerradas sin entrega pueden afectar su evaluación de desempeño</li>
+                <li>Se recomienda revisar regularmente las asignaciones pendientes en el sistema</li>
+                <li>Para futuras asignaciones, puede entregarlas hasta la fecha de vencimiento (a tiempo) o hasta la fecha de cierre (con retraso)</li>
+                <li>Después de la fecha de cierre, no se podrán realizar entregas</li>
+              </ul>
+            </div>
+            
+            <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; margin: 20px 0;">
+              <h4 style="color: #721c24; margin-top: 0;">📋 Consecuencias del Mal Desempeño:</h4>
+              <ul style="color: #721c24;">
+                <li>Impacto negativo en la evaluación de desempeño anual</li>
+                <li>Posible revisión del status laboral</li>
+                <li>Afectación en futuras asignaciones y responsabilidades</li>
+                <li>Registro permanente en el expediente laboral</li>
+              </ul>
+            </div>
+            
+            <p>Para cualquier consulta, aclaración o si considera que hay un error en este reporte, puede contactar inmediatamente al departamento de recursos humanos o coordinación académica.</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <p style="background-color: #007bff; color: white; padding: 15px; border-radius: 5px; display: inline-block;">
+                <strong>Acceda al sistema para revisar sus asignaciones pendientes</strong>
+              </p>
+            </div>
+            
+            <hr style="margin: 30px 0;">
+            
+            <p style="color: #666; font-size: 12px;">
+              Este es un mensaje automático del Sistema de Seguimiento Docente.<br>
+              Fecha de generación: ${new Date().toLocaleDateString('es-MX', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}<br>
+              No responda a este correo electrónico.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER || 'noreply@seguimiento-docentes.com',
+      to: to,
+      subject: `⚠️ IMPORTANTE: Reporte de Desempeño - ${assignments.length} Asignación(es) No Entregada(s)`,
+      html: emailHtml
+    };
+
+    return await this.transporter.sendMail(mailOptions);
+  }
+
+  /**
+   * Envía recordatorios de asignaciones próximas a vencer
+   */
+  async sendAssignmentReminders({ to, teacherName, assignments }) {
+    this.ensureTransporter();
+
+    const assignmentsList = assignments.map(assignment => {
+      const priorityColor = assignment.priority === 'high' ? '#d32f2f' : 
+                          assignment.priority === 'medium' ? '#ff9800' : '#4caf50';
+      const priorityText = assignment.priority === 'high' ? 'URGENTE' : 
+                         assignment.priority === 'medium' ? 'IMPORTANTE' : 'NORMAL';
+
+      return `
+        <div style="background-color: white; padding: 20px; border-left: 4px solid ${priorityColor}; margin: 15px 0; border-radius: 5px;">
+          <h4 style="margin-top: 0; color: ${priorityColor};">
+            ${assignment.title} 
+            <span style="font-size: 12px; background-color: ${priorityColor}; color: white; padding: 2px 8px; border-radius: 3px;">${priorityText}</span>
+          </h4>
+          <p><strong>Descripción:</strong> ${assignment.description.substring(0, 150)}${assignment.description.length > 150 ? '...' : ''}</p>
+          <p><strong>Fecha de entrega:</strong> ${new Date(assignment.dueDate).toLocaleDateString('es-MX')} a las ${new Date(assignment.dueDate).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</p>
+          <p><strong>Fecha de cierre:</strong> ${new Date(assignment.closeDate).toLocaleDateString('es-MX')} a las ${new Date(assignment.closeDate).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</p>
+          <p style="color: ${priorityColor}; font-weight: bold; font-size: 16px;">
+            ${assignment.daysUntilDue <= 0 ? '⏰ VENCE HOY' : 
+              assignment.daysUntilDue === 1 ? '⏰ VENCE MAÑANA' : 
+              `⏰ Quedan ${assignment.daysUntilDue} días`}
+          </p>
+        </div>
+      `;
+    }).join('');
+
+    const totalUrgent = assignments.filter(a => a.priority === 'high').length;
+    const totalImportant = assignments.filter(a => a.priority === 'medium').length;
+
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Recordatorio - Asignaciones Próximas a Vencer</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #ff9800; color: white; padding: 20px; text-align: center;">
+            <h1 style="margin: 0;">⏰ Recordatorio de Asignaciones</h1>
+          </div>
+          
+          <div style="padding: 20px; background-color: #f9f9f9;">
+            <p>Estimado/a <strong>${teacherName}</strong>,</p>
+            
+            <p>Le recordamos que tiene <strong>${assignments.length}</strong> asignación(es) próxima(s) a vencer:</p>
+            
+            ${totalUrgent > 0 ? `
+              <div style="background-color: #ffebee; border: 1px solid #f44336; padding: 15px; margin: 15px 0; border-radius: 5px;">
+                <h4 style="color: #d32f2f; margin-top: 0;">🚨 URGENTE: ${totalUrgent} asignación(es) vencen hoy o mañana</h4>
+              </div>
+            ` : ''}
+            
+            ${totalImportant > 0 ? `
+              <div style="background-color: #fff3e0; border: 1px solid #ff9800; padding: 15px; margin: 15px 0; border-radius: 5px;">
+                <h4 style="color: #f57c00; margin-top: 0;">⚠️ IMPORTANTE: ${totalImportant} asignación(es) vencen en los próximos días</h4>
+              </div>
+            ` : ''}
+            
+            <h3 style="color: #ff9800;">Sus asignaciones pendientes:</h3>
+            
+            ${assignmentsList}
+            
+            <div style="background-color: #e3f2fd; border: 1px solid #2196f3; padding: 15px; margin: 20px 0; border-radius: 5px;">
+              <h4 style="color: #1976d2; margin-top: 0;">📝 Recuerde:</h4>
+              <ul style="color: #1976d2;">
+                <li><strong>Hasta la fecha de entrega:</strong> Su entrega será marcada como "a tiempo"</li>
+                <li><strong>Hasta la fecha de cierre:</strong> Su entrega será marcada como "con retraso"</li>
+                <li><strong>Después del cierre:</strong> No se podrán realizar entregas y se considerará como incumplimiento</li>
+              </ul>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <p style="background-color: #4caf50; color: white; padding: 15px; border-radius: 5px; display: inline-block;">
+                <strong>Ingrese al sistema ahora para revisar y entregar sus asignaciones</strong>
+              </p>
+            </div>
+            
+            <p>No deje pasar las fechas límite. Su puntualidad en las entregas es fundamental para la evaluación de su desempeño laboral.</p>
+            
+            <hr style="margin: 30px 0;">
+            
+            <p style="color: #666; font-size: 12px;">
+              Este es un mensaje automático del Sistema de Seguimiento Docente.<br>
+              Fecha de envío: ${new Date().toLocaleDateString('es-MX', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}<br>
+              No responda a este correo electrónico.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const urgentCount = assignments.filter(a => a.priority === 'high').length;
+    const subjectPrefix = urgentCount > 0 ? '🚨 URGENTE' : '⏰';
+    
+    const mailOptions = {
+      from: process.env.EMAIL_USER || 'noreply@seguimiento-docentes.com',
+      to: to,
+      subject: `${subjectPrefix} Recordatorio: ${assignments.length} Asignación(es) Próxima(s) a Vencer`,
+      html: emailHtml
+    };
+
+    return await this.transporter.sendMail(mailOptions);
+  }
+
+  /**
    * Verifica la conexión del servicio de email
    */
   async verifyConnection() {
