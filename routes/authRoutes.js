@@ -50,7 +50,7 @@ router.post('/register', uploadProfile, async (req, res) => {  try {
     const savedUser = await user.save();
     const token = jwt.sign(
       { id: savedUser._id },
-      process.env.JWT_SECRET || 'tu_jwt_secret',
+      process.env.JWT_SECRET || 'tu_secreto_muy_seguro_123',
       { expiresIn: '7d' } // Aumentado a 7 días para debugging
     );
 
@@ -106,7 +106,7 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id },
-      process.env.JWT_SECRET || 'tu_jwt_secret',
+      process.env.JWT_SECRET || 'tu_secreto_muy_seguro_123',
       { expiresIn: '7d' } // Aumentado a 7 días para debugging
     );
 

@@ -114,7 +114,8 @@ export const getAllAssignments = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: assignments
+            assignments: assignments,
+            total: assignments.length
         });
     } catch (error) {
         console.error('Error al obtener asignaciones:', error);
@@ -136,7 +137,8 @@ export const getUserAssignments = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: assignments
+            assignments: assignments,
+            total: assignments.length
         });
     } catch (error) {
         console.error('Error al obtener asignaciones del usuario:', error);
@@ -228,4 +230,266 @@ export const updateAssignmentStatus = async (req, res) => {
             error: error.message || 'Error al actualizar el estado'
         });
     }
-}; 
+};
+
+// Obtener estadísticas del dashboard para docentes
+export const getUserDashboardStats = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        
+        // Obtener todas las asignaciones del usuario
+        const assignments = await Assignment.find({
+            assignedTo: userId
+        });
+
+        const stats = {
+            total: assignments.length,
+            pending: assignments.filter(a => a.status === 'pending').length,
+            completed: assignments.filter(a => a.status === 'completed').length,
+            overdue: assignments.filter(a => {
+                return a.status === 'pending' && new Date(a.dueDate) < new Date();
+            }).length,
+            byPriority: {
+                low: assignments.filter(a => a.priority === 'low').length,
+                medium: assignments.filter(a => a.priority === 'medium').length,
+                high: assignments.filter(a => a.priority === 'high').length
+            }
+        };
+
+        // Calcular tasa de completación
+        stats.completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+
+        res.status(200).json({
+            success: true,
+            ...stats
+        });
+    } catch (error) {
+        console.error('Error al obtener estadísticas:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener las estadísticas'
+        });
+    }
+};
+
+// Obtener una asignación específica por ID
+export const getAssignmentById = async (req, res) => {
+    try {
+        const assignmentId = req.params.id;
+        const userId = req.user._id;
+
+        const assignment = await Assignment.findById(assignmentId)
+            .populate('createdBy', 'nombre apellidoPaterno apellidoMaterno email')
+            .populate('assignedTo', 'nombre apellidoPaterno apellidoMaterno email');
+
+        if (!assignment) {
+            return res.status(404).json({
+                success: false,
+                error: 'Asignación no encontrada'
+            });
+        }
+
+        // Verificar que el usuario tenga acceso a esta asignación
+        const isAssigned = assignment.assignedTo.some(user => user._id.toString() === userId.toString());
+        const isCreator = assignment.createdBy._id.toString() === userId.toString();
+        const isAdmin = req.user.role === 'admin';
+
+        if (!isAssigned && !isCreator && !isAdmin) {
+            return res.status(403).json({
+                success: false,
+                error: 'No tienes permiso para ver esta asignación'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: assignment
+        });
+    } catch (error) {
+        console.error('Error al obtener asignación:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener la asignación'
+        });
+    }
+};
+
+// Obtener asignaciones filtradas para docentes
+export const getFilteredAssignments = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { status, priority, sort = 'dueDate', order = 'asc' } = req.query;
+
+        // Construir filtros
+        const filter = { assignedTo: userId };
+        
+        if (status) {
+            filter.status = status;
+        }
+        
+        if (priority) {
+            filter.priority = priority;
+        }
+
+        // Construir ordenamiento
+        const sortObj = {};
+        sortObj[sort] = order === 'desc' ? -1 : 1;
+
+        const assignments = await Assignment.find(filter)
+            .populate('createdBy', 'nombre apellidoPaterno apellidoMaterno')
+            .sort(sortObj);
+
+        res.status(200).json({
+            success: true,
+            data: assignments,
+            total: assignments.length,
+            filters: { status, priority, sort, order }
+        });
+    } catch (error) {
+        console.error('Error al obtener asignaciones filtradas:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener las asignaciones filtradas'
+        });
+    }
+};
+
+// Obtener estadísticas de asignaciones del docente
+export const getTeacherAssignmentStats = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        
+        // Obtener todas las asignaciones del docente
+        const assignments = await Assignment.find({
+            assignedTo: userId
+        });
+
+        // Calcular estadísticas
+        const total = assignments.length;
+        const pending = assignments.filter(a => a.status === 'pending').length;
+        const completed = assignments.filter(a => a.status === 'completed').length;
+        const overdue = assignments.filter(a => {
+            return a.status === 'pending' && new Date(a.dueDate) < new Date();
+        }).length;
+
+        // Asignaciones próximas a vencer (próximos 7 días)
+        const nextWeek = new Date();
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        const upcomingDeadlines = assignments.filter(a => {
+            return a.status === 'pending' && 
+                   new Date(a.dueDate) <= nextWeek && 
+                   new Date(a.dueDate) >= new Date();
+        }).length;
+
+        res.status(200).json({
+            success: true,
+            stats: {
+                total,
+                pending,
+                completed,
+                overdue,
+                upcomingDeadlines,
+                completionRate: total > 0 ? ((completed / total) * 100).toFixed(1) : 0
+            }
+        });
+    } catch (error) {
+        console.error('Error al obtener estadísticas de asignaciones:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener las estadísticas'
+        });
+    }
+};
+
+// Obtener asignaciones filtradas para el docente
+export const getTeacherFilteredAssignments = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { status, search, sort = '-createdAt', limit = 10, page = 1 } = req.query;
+        
+        // Construir filtros
+        const filters = { assignedTo: userId };
+        
+        if (status && status !== 'all') {
+            filters.status = status;
+        }
+        
+        if (search) {
+            filters.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Calcular skip para paginación
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        // Obtener asignaciones con filtros
+        const assignments = await Assignment.find(filters)
+            .populate('createdBy', 'nombre apellidoPaterno apellidoMaterno')
+            .sort(sort)
+            .limit(parseInt(limit))
+            .skip(skip);
+
+        // Contar total para paginación
+        const total = await Assignment.countDocuments(filters);
+
+        res.status(200).json({
+            success: true,
+            assignments,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / parseInt(limit))
+            }
+        });
+    } catch (error) {
+        console.error('Error al obtener asignaciones filtradas:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener las asignaciones'
+        });
+    }
+};
+
+// Marcar asignación como completada
+export const markAssignmentCompleted = async (req, res) => {
+    try {
+        const assignmentId = req.params.id;
+        const userId = req.user._id;
+
+        const assignment = await Assignment.findById(assignmentId);
+        
+        if (!assignment) {
+            return res.status(404).json({
+                success: false,
+                error: 'Asignación no encontrada'
+            });
+        }
+
+        // Verificar que el usuario esté asignado a esta tarea
+        if (!assignment.assignedTo.includes(userId)) {
+            return res.status(403).json({
+                success: false,
+                error: 'No tienes permiso para modificar esta asignación'
+            });
+        }
+
+        assignment.status = 'completed';
+        assignment.completedAt = new Date();
+        await assignment.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Asignación marcada como completada',
+            assignment
+        });
+    } catch (error) {
+        console.error('Error al marcar asignación como completada:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al actualizar la asignación'
+        });
+    }
+};
