@@ -2,13 +2,16 @@ import mongoose from 'mongoose';
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/medidor', {
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/medidor', {
       useNewUrlParser: true,
-      useUnifiedTopology: true
+      useUnifiedTopology: true,
+      autoIndex: true // Habilitar la creación automática de índices
     });
-    console.log(`MongoDB conectado: ${conn.connection.host}`);
+
+    console.log('Conectado a MongoDB');
+
   } catch (error) {
-    console.error('Error al conectar a MongoDB:', error);
+    console.error('Error de conexión:', error);
     process.exit(1);
   }
 };

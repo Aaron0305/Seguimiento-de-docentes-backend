@@ -1,9 +1,11 @@
 import Assignment from '../models/Assignment.js';
 import User from '../models/User.js';
+import path from 'path';
 import fs from 'fs';
 import emailService from '../services/emailService.js';
-import { sendNotification } from '../app.js';
+import notificationService from '../services/notificationService.js';
 
+// Crear una nueva asignación
 export const createAssignment = async (req, res) => {
     try {
         const { title, description, dueDate, closeDate, isGeneral } = req.body;
@@ -114,18 +116,13 @@ export const createAssignment = async (req, res) => {
                 closeDate: assignment.closeDate,
                 assignmentUrl
             });
-
-            // Enviar notificación en tiempo real
-            sendNotification(teacher._id.toString(), {
-                type: 'NEW_ASSIGNMENT',
-                title: '¡Nueva Asignación!',
-                message: `Se te ha asignado una nueva tarea: ${title}`,
-                timestamp: new Date(),
-                data: {
-                    assignmentId: assignment._id
-                }
-            });
         }
+
+        // Enviar notificaciones en tiempo real
+        notificationService.sendNewAssignmentNotification(
+            assignment.assignedTo,
+            populatedAssignment
+        );
 
         res.status(201).json({
             success: true,
