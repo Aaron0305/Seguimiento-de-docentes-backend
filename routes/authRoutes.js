@@ -16,7 +16,8 @@ router.post('/register', uploadProfile, async (req, res) => {  try {
       nombre, 
       apellidoPaterno, 
       apellidoMaterno, 
-      carrera, 
+      carrera,
+      role, // Agregamos el role a los campos que extraemos
       semestre 
     } = req.body;
 
@@ -34,7 +35,17 @@ router.post('/register', uploadProfile, async (req, res) => {  try {
           ? 'Este correo electrónico ya está registrado' 
           : 'Este número de control ya está registrado'
       });
-    }    const hashedPassword = await bcrypt.hash(password, 10);
+    }
+
+    // Validar que el role sea válido
+    if (role && !['admin', 'docente'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rol inválido. Debe ser "admin" o "docente"'
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({
       email,
       password: hashedPassword,
@@ -44,7 +55,8 @@ router.post('/register', uploadProfile, async (req, res) => {  try {
       apellidoMaterno,
       carrera,
       semestre,
-      fotoPerfil
+      fotoPerfil,
+      role: role || 'docente' // Asegurarnos de incluir el role
     });
 
     const savedUser = await user.save();
