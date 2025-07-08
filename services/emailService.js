@@ -575,6 +575,35 @@ ${templateData.companyName}
     return await this.transporter.sendMail(mailOptions);
   }
 
+  async sendNewAssignmentNotification({ to, teacherName, title, description, dueDate, closeDate, assignmentUrl }) {
+    try {
+      this.ensureTransporter();
+
+      const html = this.compileTemplate('new-assignment', {
+        teacherName,
+        title,
+        description,
+        dueDate: new Date(dueDate).toLocaleDateString('es-MX'),
+        closeDate: new Date(closeDate).toLocaleDateString('es-MX'),
+        assignmentUrl
+      });
+
+      const mailOptions = {
+        from: `"Sistema de Seguimiento de Docentes" <${process.env.EMAIL_USER}>`,
+        to,
+        subject: 'Nueva Asignación - Sistema de Seguimiento de Docentes',
+        html
+      };
+
+      const result = await this.transporter.sendMail(mailOptions);
+      console.log('✅ Notificación de nueva asignación enviada a:', to);
+      return result;
+    } catch (error) {
+      console.error('❌ Error enviando notificación de nueva asignación:', error);
+      throw error;
+    }
+  }
+
   /**
    * Verifica la conexión del servicio de email
    */

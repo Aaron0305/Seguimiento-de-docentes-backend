@@ -1,9 +1,9 @@
 import Assignment from '../models/Assignment.js';
 import User from '../models/User.js';
-import path from 'path';
 import fs from 'fs';
+import emailService from '../services/emailService.js';
+import { sendNotification } from '../app.js';
 
-// Crear una nueva asignación
 export const createAssignment = async (req, res) => {
     try {
         const { title, description, dueDate, closeDate, isGeneral } = req.body;
@@ -58,9 +58,11 @@ export const createAssignment = async (req, res) => {
             }));
         }
 
+        let teachers = [];
+
         // Si es una asignación general, asignar a todos los docentes
         if (assignment.isGeneral) {
-            const teachers = await User.find({ role: 'docente' }).select('_id');
+            teachers = await User.find({ role: 'docente' }).select('_id nombre apellidoPaterno apellidoMaterno email');
             if (!teachers || teachers.length === 0) {
                 throw new Error('No se encontraron docentes para asignar');
             }
@@ -77,16 +79,16 @@ export const createAssignment = async (req, res) => {
             }
 
             // Verificar que todos los usuarios asignados existan y sean docentes
-            const users = await User.find({
+            teachers = await User.find({
                 _id: { $in: assignedTo },
                 role: 'docente'
-            }).select('_id');
+            }).select('_id nombre apellidoPaterno apellidoMaterno email');
 
-            if (!users || users.length !== assignedTo.length) {
+            if (!teachers || teachers.length !== assignedTo.length) {
                 throw new Error('Uno o más usuarios seleccionados no son válidos o no son docentes');
             }
 
-            assignment.assignedTo = users.map(user => user._id);
+            assignment.assignedTo = teachers.map(teacher => teacher._id);
         }
 
         // Guardar la asignación
@@ -96,6 +98,34 @@ export const createAssignment = async (req, res) => {
         const populatedAssignment = await Assignment.findById(assignment._id)
             .populate('assignedTo', 'nombre apellidoPaterno apellidoMaterno email')
             .populate('createdBy', 'nombre apellidoPaterno apellidoMaterno');
+
+        // Enviar notificaciones por correo electrónico y en tiempo real
+        for (const teacher of teachers) {
+            const teacherName = `${teacher.nombre} ${teacher.apellidoPaterno} ${teacher.apellidoMaterno}`;
+            const assignmentUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard/assignments/${assignment._id}`;
+
+            // Enviar correo electrónico
+            await emailService.sendNewAssignmentNotification({
+                to: teacher.email,
+                teacherName,
+                title: assignment.title,
+                description: assignment.description,
+                dueDate: assignment.dueDate,
+                closeDate: assignment.closeDate,
+                assignmentUrl
+            });
+
+            // Enviar notificación en tiempo real
+            sendNotification(teacher._id.toString(), {
+                type: 'NEW_ASSIGNMENT',
+                title: '¡Nueva Asignación!',
+                message: `Se te ha asignado una nueva tarea: ${title}`,
+                timestamp: new Date(),
+                data: {
+                    assignmentId: assignment._id
+                }
+            });
+        }
 
         res.status(201).json({
             success: true,
@@ -452,103 +482,56 @@ export const getTeacherAssignmentStats = async (req, res) => {
 
 // Obtener asignaciones filtradas para el docente
 export const getTeacherFilteredAssignments = async (req, res) => {
-    console.log('🎯 ===== LLAMADA A getTeacherFilteredAssignments =====');
-    console.log('⏰ Timestamp:', new Date().toISOString());
-    console.log('🌐 Method:', req.method);
-    console.log('🔗 URL:', req.originalUrl);
-    console.log('🔑 Headers:', {
-        authorization: req.headers.authorization ? 'Bearer [TOKEN]' : 'No auth',
-        'content-type': req.headers['content-type'],
-        'user-agent': req.headers['user-agent']?.substring(0, 50) + '...'
-    });
-    
     try {
-        const userId = req.user._id;
-        const { status, search, sort = '-createdAt', limit = 10, page = 1 } = req.query;
-        
-        console.log('🔍 getTeacherFilteredAssignments - Parámetros recibidos:', {
-            userId: userId.toString(),
-            status,
-            search,
-            sort,
-            limit,
-            page,
-            queryCompleto: req.query
-        });
-        
-        // Construir filtros
-        const filters = { assignedTo: userId };
-        
+        const { status, search, sort = '-createdAt', page = 1, limit = 10, overdue } = req.query;
+        const query = { assignedTo: req.user._id };
+        const now = new Date();
+
+        // Aplicar filtro de estado
         if (status && status !== 'all') {
-            filters.status = status;
-            console.log('📋 Aplicando filtro de status:', status);
-        } else {
-            console.log('📋 Sin filtro de status (mostrar todas)');
+            if (status === 'vencido') {
+                // Para vencidas: mostrar las pendientes que ya pasaron su fecha de vencimiento
+                query.status = 'pending';
+                query.dueDate = { $lt: now };
+            } else if (status === 'pending') {
+                // Para pendientes: mostrar solo las que NO han vencido
+                query.status = 'pending';
+                query.dueDate = { $gte: now };
+            } else {
+                // Para otros estados (completed, etc)
+                query.status = status;
+            }
         }
-        
+
+        // Aplicar búsqueda si existe
         if (search) {
-            filters.$or = [
+            query.$or = [
                 { title: { $regex: search, $options: 'i' } },
                 { description: { $regex: search, $options: 'i' } }
             ];
-            console.log('🔍 Aplicando filtro de búsqueda:', search);
         }
 
-        console.log('🗂️ Filtros finales para MongoDB:', filters);
-
-        // Calcular skip para paginación
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        console.log('📄 Paginación:', { page: parseInt(page), limit: parseInt(limit), skip });
-
-        // Obtener asignaciones con filtros
-        const assignments = await Assignment.find(filters)
+        const assignments = await Assignment.find(query)
             .populate('createdBy', 'nombre apellidoPaterno apellidoMaterno role')
             .sort(sort)
-            .limit(parseInt(limit))
-            .skip(skip);
+            .skip(skip)
+            .limit(parseInt(limit));
 
-        // Contar total para paginación
-        const total = await Assignment.countDocuments(filters);
+        const total = await Assignment.countDocuments(query);
 
-        console.log('📊 Resultados:', {
-            totalEncontradas: assignments.length,
-            totalEnBD: total,
-            paginaActual: parseInt(page),
-            totalPaginas: Math.ceil(total / parseInt(limit))
-        });
-
-        if (assignments.length > 0) {
-            console.log('📝 Primeras asignaciones encontradas:');
-            assignments.slice(0, 3).forEach((assignment, index) => {
-                console.log(`   ${index + 1}. ${assignment.title} - Estado: ${assignment.status}`);
-            });
-        } else {
-            console.log('❌ No se encontraron asignaciones con los filtros aplicados');
-        }
-
-        const response = {
+        res.status(200).json({
             success: true,
             assignments,
             pagination: {
-                total,
-                page: parseInt(page),
-                limit: parseInt(limit),
-                totalPages: Math.ceil(total / parseInt(limit))
+                currentPage: parseInt(page),
+                totalPages: Math.ceil(total / parseInt(limit)),
+                totalItems: total
             }
-        };
-
-        console.log('📤 Enviando respuesta:', {
-            success: response.success,
-            assignmentsCount: response.assignments.length,
-            pagination: response.pagination
         });
-        console.log('🎯 ===== FIN DE getTeacherFilteredAssignments =====\n');
-
-        res.status(200).json(response);
     } catch (error) {
-        console.error('❌ Error al obtener asignaciones filtradas:', error);
-        console.log('🎯 ===== ERROR EN getTeacherFilteredAssignments =====\n');
+        console.error('Error al obtener asignaciones filtradas:', error);
         res.status(500).json({
             success: false,
             error: error.message || 'Error al obtener las asignaciones'

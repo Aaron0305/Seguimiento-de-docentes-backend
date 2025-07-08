@@ -41,4 +41,4 @@ router.post('/init', async (req, res) => {
   }
 });
 
-export { router };
+export default router;
