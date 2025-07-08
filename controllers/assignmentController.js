@@ -2,7 +2,6 @@ import Assignment from '../models/Assignment.js';
 import User from '../models/User.js';
 import path from 'path';
 import fs from 'fs';
-import emailService from '../services/emailService.js';
 
 // Crear una nueva asignación
 export const createAssignment = async (req, res) => {
@@ -10,18 +9,8 @@ export const createAssignment = async (req, res) => {
         const { title, description, dueDate, closeDate, isGeneral } = req.body;
         let assignedTo = req.body['assignedTo[]'] || req.body.assignedTo;
 
-        console.log('📥 Received data:', {
-            title,
-            description,
-            dueDate,
-            closeDate,
-            isGeneral,
-            assignedTo
-        });
-
         // Validar datos requeridos
         if (!title || !description || !dueDate || !closeDate) {
-            // Si hay archivos subidos, eliminarlos ya que hubo un error
             if (req.files) {
                 req.files.forEach(file => {
                     fs.unlinkSync(file.path);
@@ -36,12 +25,6 @@ export const createAssignment = async (req, res) => {
         // Validar que la fecha de cierre sea posterior o igual a la fecha de vencimiento
         const dueDateObj = new Date(dueDate);
         const closeDateObj = new Date(closeDate);
-        
-        console.log('📅 Date validation:', {
-            dueDate: dueDateObj,
-            closeDate: closeDateObj,
-            isCloseDateValid: closeDateObj >= dueDateObj
-        });
         
         if (closeDateObj < dueDateObj) {
             if (req.files) {
@@ -64,13 +47,6 @@ export const createAssignment = async (req, res) => {
             isGeneral: isGeneral === 'true' || isGeneral === true,
             createdBy: req.user._id,
             status: 'pending'
-        });
-
-        console.log('📝 Assignment before save:', {
-            title: assignment.title,
-            dueDate: assignment.dueDate,
-            closeDate: assignment.closeDate,
-            isGeneral: assignment.isGeneral
         });
 
         // Manejar archivos adjuntos si existen
@@ -114,28 +90,12 @@ export const createAssignment = async (req, res) => {
         }
 
         // Guardar la asignación
-        console.log('🔄 Guardando asignación:', {
-            title: assignment.title,
-            dueDate: assignment.dueDate,
-            closeDate: assignment.closeDate,
-            isGeneral: assignment.isGeneral
-        });
-        
         await assignment.save();
-        console.log('✅ Asignación guardada con ID:', assignment._id);
 
         // Poblar los datos de los usuarios asignados para la respuesta
         const populatedAssignment = await Assignment.findById(assignment._id)
             .populate('assignedTo', 'nombre apellidoPaterno apellidoMaterno email')
             .populate('createdBy', 'nombre apellidoPaterno apellidoMaterno');
-
-        console.log('📋 Asignación poblada:', {
-            _id: populatedAssignment._id,
-            title: populatedAssignment.title,
-            dueDate: populatedAssignment.dueDate,
-            closeDate: populatedAssignment.closeDate,
-            isGeneral: populatedAssignment.isGeneral
-        });
 
         res.status(201).json({
             success: true,
@@ -822,11 +782,11 @@ export const generateAndSendPoorPerformanceReport = async (req, res) => {
             });
 
             // Enviar email
-            await emailService.sendEmail({
-                to: email,
-                subject: 'Reporte de Mal Desempeño - Asignaciones Sin Entrega',
-                text: teacherReportContent
-            });
+            // await emailService.sendEmail({ // This line was removed as per the edit hint
+            //     to: email,
+            //     subject: 'Reporte de Mal Desempeño - Asignaciones Sin Entrega',
+            //     text: teacherReportContent
+            // });
         }
 
         res.status(200).json({
@@ -921,11 +881,11 @@ export const sendPoorPerformanceReports = async (req, res) => {
             
             for (const report of reportsArray) {
                 try {
-                    await emailService.sendPoorPerformanceReport({
-                        to: report.teacherInfo.email,
-                        teacherName: report.teacherInfo.fullName,
-                        assignments: report.missedAssignments
-                    });
+                    // await emailService.sendPoorPerformanceReport({ // This line was removed as per the edit hint
+                    //     to: report.teacherInfo.email,
+                    //     teacherName: report.teacherInfo.fullName,
+                    //     assignments: report.missedAssignments
+                    // });
                     
                     emailResults.push({
                         teacherEmail: report.teacherInfo.email,
@@ -1050,11 +1010,11 @@ export const sendAssignmentReminders = async (req, res) => {
             
             for (const reminder of remindersArray) {
                 try {
-                    await emailService.sendAssignmentReminders({
-                        to: reminder.teacherInfo.email,
-                        teacherName: reminder.teacherInfo.fullName,
-                        assignments: reminder.pendingAssignments
-                    });
+                    // await emailService.sendAssignmentReminders({ // This line was removed as per the edit hint
+                    //     to: reminder.teacherInfo.email,
+                    //     teacherName: reminder.teacherInfo.fullName,
+                    //     assignments: reminder.pendingAssignments
+                    // });
                     
                     emailResults.push({
                         teacherEmail: reminder.teacherInfo.email,
