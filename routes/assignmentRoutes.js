@@ -17,7 +17,8 @@ import {
     getPoorPerformanceReport,
     getSubmissionStatistics,
     sendPoorPerformanceReports,
-    sendAssignmentReminders
+    sendAssignmentReminders,
+    getAllTeachersStats
 } from '../controllers/assignmentController.js';
 
 // Rutas para administradores
@@ -33,6 +34,7 @@ router.get('/reports/poor-performance', auth, getPoorPerformanceReport);
 router.get('/reports/submission-statistics', auth, getSubmissionStatistics);
 router.post('/reports/send-poor-performance', auth, sendPoorPerformanceReports);
 router.post('/reports/send-reminders', auth, sendAssignmentReminders);
+router.get('/teachers/stats', auth, getAllTeachersStats); // Nueva ruta para estadísticas de todos los profesores
 
 // Ruta temporal sin autenticación para pruebas
 router.post('/test', 

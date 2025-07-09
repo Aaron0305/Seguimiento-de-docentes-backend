@@ -1,5 +1,6 @@
 import Assignment from '../models/Assignment.js';
 import User from '../models/User.js';
+import TeacherStats from '../models/TeacherStats.js';
 import path from 'path';
 import fs from 'fs';
 import emailService from '../services/emailService.js';
@@ -95,6 +96,11 @@ export const createAssignment = async (req, res) => {
 
         // Guardar la asignación
         await assignment.save();
+
+        // Actualizar estadísticas para cada profesor asignado
+        for (const teacherId of assignment.assignedTo) {
+            await TeacherStats.updateTeacherStats(teacherId);
+        }
 
         // Poblar los datos de los usuarios asignados para la respuesta
         const populatedAssignment = await Assignment.findById(assignment._id)
@@ -308,36 +314,26 @@ export const updateAssignmentStatus = async (req, res) => {
     }
 };
 
-// Obtener estadísticas del dashboard para docentes
+// Obtener estadísticas del dashboard del usuario
 export const getUserDashboardStats = async (req, res) => {
     try {
-        const userId = req.user._id;
+        // Obtener estadísticas actualizadas
+        const stats = await TeacherStats.findOne({ teacher: req.user._id });
         
-        // Obtener todas las asignaciones del usuario
-        const assignments = await Assignment.find({
-            assignedTo: userId
-        });
-
-        const stats = {
-            total: assignments.length,
-            pending: assignments.filter(a => a.status === 'pending').length,
-            completed: assignments.filter(a => a.status === 'completed').length,
-            overdue: assignments.filter(a => {
-                return a.status === 'pending' && new Date(a.dueDate) < new Date();
-            }).length,
-            byPriority: {
-                low: assignments.filter(a => a.priority === 'low').length,
-                medium: assignments.filter(a => a.priority === 'medium').length,
-                high: assignments.filter(a => a.priority === 'high').length
-            }
-        };
-
-        // Calcular tasa de completación
-        stats.completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+        if (!stats) {
+            // Si no existen estadísticas, crearlas
+            await TeacherStats.updateTeacherStats(req.user._id);
+            const newStats = await TeacherStats.findOne({ teacher: req.user._id });
+            
+            return res.status(200).json({
+                success: true,
+                stats: newStats.stats
+            });
+        }
 
         res.status(200).json({
             success: true,
-            ...stats
+            stats: stats.stats
         });
     } catch (error) {
         console.error('Error al obtener estadísticas:', error);
@@ -434,6 +430,7 @@ export const getFilteredAssignments = async (req, res) => {
 export const getTeacherAssignmentStats = async (req, res) => {
     try {
         const userId = req.user._id;
+        const now = new Date();
         
         // Obtener todas las asignaciones del docente
         const assignments = await Assignment.find({
@@ -442,20 +439,14 @@ export const getTeacherAssignmentStats = async (req, res) => {
 
         // Calcular estadísticas
         const total = assignments.length;
-        const pending = assignments.filter(a => a.status === 'pending').length;
         const completed = assignments.filter(a => a.status === 'completed').length;
-        const overdue = assignments.filter(a => {
-            return a.status === 'pending' && new Date(a.dueDate) < new Date();
-        }).length;
+        
+        // Filtrar asignaciones pendientes y vencidas
+        const pendingAssignments = assignments.filter(a => a.status === 'pending');
+        const pending = pendingAssignments.filter(a => new Date(a.dueDate) > now).length;
+        const overdue = pendingAssignments.filter(a => new Date(a.dueDate) <= now).length;
 
-        // Asignaciones próximas a vencer (próximos 7 días)
-        const nextWeek = new Date();
-        nextWeek.setDate(nextWeek.getDate() + 7);
-        const upcomingDeadlines = assignments.filter(a => {
-            return a.status === 'pending' && 
-                   new Date(a.dueDate) <= nextWeek && 
-                   new Date(a.dueDate) >= new Date();
-        }).length;
+        console.log('Estadísticas calculadas:', { total, pending, completed, overdue }); // Para debug
 
         res.status(200).json({
             success: true,
@@ -463,9 +454,7 @@ export const getTeacherAssignmentStats = async (req, res) => {
                 total,
                 pending,
                 completed,
-                overdue,
-                upcomingDeadlines,
-                completionRate: total > 0 ? ((completed / total) * 100).toFixed(1) : 0
+                overdue
             }
         });
     } catch (error) {
@@ -480,23 +469,23 @@ export const getTeacherAssignmentStats = async (req, res) => {
 // Obtener asignaciones filtradas para el docente
 export const getTeacherFilteredAssignments = async (req, res) => {
     try {
-        const { status, search, sort = '-createdAt', page = 1, limit = 10, overdue } = req.query;
+        const { status, search, sort = '-createdAt', page = 1, limit = 10 } = req.query;
         const query = { assignedTo: req.user._id };
         const now = new Date();
 
         // Aplicar filtro de estado
         if (status && status !== 'all') {
             if (status === 'vencido') {
-                // Para vencidas: mostrar las pendientes que ya pasaron su fecha de vencimiento
+                // Para vencidas: mostrar solo las que están pendientes y pasaron su fecha de vencimiento
                 query.status = 'pending';
                 query.dueDate = { $lt: now };
             } else if (status === 'pending') {
-                // Para pendientes: mostrar solo las que NO han vencido
+                // Para pendientes: mostrar solo las que están pendientes y NO han pasado su fecha de vencimiento
                 query.status = 'pending';
-                query.dueDate = { $gte: now };
-            } else {
-                // Para otros estados (completed, etc)
-                query.status = status;
+                query.dueDate = { $gt: now };
+            } else if (status === 'completed') {
+                // Para completadas: mostrar solo las completadas sin importar la fecha
+                query.status = 'completed';
             }
         }
 
@@ -508,12 +497,12 @@ export const getTeacherFilteredAssignments = async (req, res) => {
             ];
         }
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        console.log('Query de filtrado:', query); // Para debug
 
         const assignments = await Assignment.find(query)
             .populate('createdBy', 'nombre apellidoPaterno apellidoMaterno role')
             .sort(sort)
-            .skip(skip)
+            .skip((parseInt(page) - 1) * parseInt(limit))
             .limit(parseInt(limit));
 
         const total = await Assignment.countDocuments(query);
@@ -601,6 +590,9 @@ export const markAssignmentCompleted = async (req, res) => {
         
         const savedAssignment = await assignment.save();
         console.log('✅ Asignación guardada exitosamente');
+
+        // Actualizar estadísticas del profesor
+        await TeacherStats.updateTeacherStats(req.user._id);
 
         // Respuesta simple y directa
         res.status(200).json({
@@ -1099,6 +1091,40 @@ export const getSubmissionStatistics = async (req, res) => {
         res.status(500).json({
             success: false,
             error: error.message || 'Error al obtener las estadísticas'
+        });
+    }
+};
+
+// Obtener estadísticas de todos los profesores
+export const getAllTeachersStats = async (req, res) => {
+    try {
+        // Obtener todos los profesores
+        const teachers = await User.find({ role: 'docente' }).select('_id nombre apellidoPaterno apellidoMaterno email');
+        
+        // Asegurarse de que cada profesor tenga estadísticas actualizadas
+        for (const teacher of teachers) {
+            await TeacherStats.updateTeacherStats(teacher._id);
+        }
+
+        // Obtener todas las estadísticas actualizadas
+        const stats = await TeacherStats.find()
+            .populate('teacher', 'nombre apellidoPaterno apellidoMaterno email');
+
+        res.status(200).json({
+            success: true,
+            stats: stats.map(stat => ({
+                teacherId: stat.teacher._id,
+                teacherName: `${stat.teacher.nombre} ${stat.teacher.apellidoPaterno} ${stat.teacher.apellidoMaterno}`,
+                email: stat.teacher.email,
+                stats: stat.stats,
+                lastUpdated: stat.lastUpdated
+            }))
+        });
+    } catch (error) {
+        console.error('Error al obtener estadísticas de profesores:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Error al obtener las estadísticas de los profesores'
         });
     }
 };
