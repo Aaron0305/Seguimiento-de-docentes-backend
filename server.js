@@ -9,6 +9,7 @@ import assignmentRoutes from './routes/assignmentRoutes.js';
 import dailyRecordRoutes from './routes/dailyRecordRoutes.js';
 import carrerasRoutes from './routes/carreras.js';
 import semestresRoutes from './routes/semestres.js';
+import statsRoutes from './routes/statsRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
 import notificationService from './services/notificationService.js';
 
@@ -21,9 +22,18 @@ const httpServer = createServer(app);
 notificationService.initialize(httpServer);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: 'http://localhost:5173',
+    credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Logging middleware
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
 
 // Rutas estáticas
 app.use('/uploads', express.static('uploads'));
@@ -35,18 +45,19 @@ app.use('/api/assignments', assignmentRoutes);
 app.use('/api/daily-records', dailyRecordRoutes);
 app.use('/api/carreras', carrerasRoutes);
 app.use('/api/semestres', semestresRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Manejador de errores
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3001;
 
 // Conectar a la base de datos
 connectDB().then(() => {
-  httpServer.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-  });
+    httpServer.listen(PORT, () => {
+        console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+    });
 }).catch(err => {
-  console.error('Error al conectar a la base de datos:', err);
-  process.exit(1);
+    console.error('Error al conectar a la base de datos:', err);
+    process.exit(1);
 });

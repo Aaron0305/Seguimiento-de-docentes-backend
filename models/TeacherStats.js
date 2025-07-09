@@ -4,8 +4,7 @@ const teacherStatsSchema = new mongoose.Schema({
     teacher: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
-        unique: true
+        required: true
     },
     stats: {
         completed: {
@@ -28,49 +27,11 @@ const teacherStatsSchema = new mongoose.Schema({
     lastUpdated: {
         type: Date,
         default: Date.now
+    },
+    __v: {
+        type: Number,
+        default: 0
     }
 });
-
-// Método para actualizar las estadísticas
-teacherStatsSchema.statics.updateTeacherStats = async function(teacherId) {
-    const Assignment = mongoose.model('Assignment');
-    
-    // Obtener todas las asignaciones del profesor
-    const assignments = await Assignment.find({
-        assignedTo: teacherId
-    });
-
-    // Inicializar contadores
-    let stats = {
-        completed: 0,
-        pending: 0,
-        overdue: 0,
-        total: assignments.length
-    };
-
-    // Calcular estadísticas
-    const now = new Date();
-    assignments.forEach(assignment => {
-        if (assignment.status === 'completed') {
-            stats.completed++;
-        } else {
-            if (now > assignment.dueDate) {
-                stats.overdue++;
-            } else {
-                stats.pending++;
-            }
-        }
-    });
-
-    // Actualizar o crear estadísticas del profesor
-    await this.findOneAndUpdate(
-        { teacher: teacherId },
-        { 
-            stats,
-            lastUpdated: now
-        },
-        { upsert: true, new: true }
-    );
-};
 
 export default mongoose.model('TeacherStats', teacherStatsSchema); 

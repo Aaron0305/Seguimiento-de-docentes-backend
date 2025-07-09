@@ -4,49 +4,66 @@
 
     dotenv.config();
 
-    export const protect = (req, res, next) => {
-    // Get token from header
-    const authHeader = req.headers.authorization;
-    
-    // Check if no token
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ message: 'No token, authorization denied' });
-    }
-
-    // Verify token
-    try {
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    export const verifyToken = (req, res, next) => {
+        console.log('Verificando token...');
         
-        // Add user from payload
-        req.user = decoded;
-        next();
-    } catch (err) {
-        res.status(401).json({ message: 'Token is not valid' });
-    }
-    };
-
-    export const authorize = (...roles) => {
-    return (req, res, next) => {
-        if (!req.user || !roles.includes(req.user.role)) {
-        return res.status(403).json({ 
-            message: `Access denied: ${roles.join('/')} role required` 
-        });
+        // Obtener token del header
+        const authHeader = req.headers.authorization;
+        console.log('Auth Header:', authHeader);
+        
+        // Verificar si no hay token
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            console.log('No se encontró token válido');
+            return res.status(401).json({ message: 'No hay token de autorización' });
         }
-        next();
-    };
+
+        try {
+            // Verificar token
+            const token = authHeader.split(' ')[1];
+            console.log('Token extraído:', token.substring(0, 10) + '...');
+            
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_secreto_seguro');
+            console.log('Token decodificado:', decoded);
+            
+            // Agregar usuario al request
+            req.user = decoded;
+            next();
+        } catch (error) {
+            console.error('Error al verificar token:', error);
+            res.status(401).json({ message: 'Token inválido' });
+        }
     };
 
     export const isAdmin = (req, res, next) => {
-    if (!req.user || req.user.role !== 'admin') {
-        return res.status(403).json({ message: 'Access denied: Admin privileges required' });
-    }
-    next();
+        console.log('Verificando rol admin...');
+        console.log('Usuario:', req.user);
+        
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Acceso denegado: Se requieren privilegios de administrador' });
+        }
+        next();
     };
 
-    export const isInstructor = (req, res, next) => {
-    if (!req.user || (req.user.role !== 'instructor' && req.user.role !== 'admin')) {
-        return res.status(403).json({ message: 'Access denied: Instructor privileges required' });
-    }
-    next();
+    export const isDocente = (req, res, next) => {
+        console.log('Verificando rol docente...');
+        console.log('Usuario:', req.user);
+        
+        if (!req.user || (req.user.role !== 'docente' && req.user.role !== 'admin')) {
+            return res.status(403).json({ message: 'Acceso denegado: Se requieren privilegios de docente' });
+        }
+        next();
+    };
+
+    export const authorize = (...roles) => {
+        return (req, res, next) => {
+            console.log('Verificando roles:', roles);
+            console.log('Usuario:', req.user);
+            
+            if (!req.user || !roles.includes(req.user.role)) {
+                return res.status(403).json({ 
+                    message: `Acceso denegado: Se requiere rol ${roles.join('/')}` 
+                });
+            }
+            next();
+        };
     };
