@@ -1,10 +1,11 @@
-const express = require('express');
+import express from 'express';
+import { getTeacherStats } from '../controllers/statsController.js';
+import { verifyToken } from '../middleware/authMiddleware.js';
+
 const router = express.Router();
-const { getTeacherStats } = require('../controllers/statsController');
-const authMiddleware = require('../middleware/authMiddleware');
 
 // Ruta para obtener estadísticas de docentes
 // Requiere autenticación y rol de administrador
-router.get('/teachers', authMiddleware, getTeacherStats);
+router.get('/teachers', verifyToken, getTeacherStats);
 
-module.exports = router; 
+export default router; 

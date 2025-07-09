@@ -1,10 +1,10 @@
-const TeacherStats = require('../models/TeacherStats');
-const Assignment = require('../models/Assignment');
-const User = require('../models/User');
-const path = require('path');
-const fs = require('fs');
-const emailService = require('../services/emailService.js');
-const notificationService = require('../services/notificationService.js');
+import TeacherStats from '../models/TeacherStats.js';
+import Assignment from '../models/Assignment.js';
+import User from '../models/User.js';
+import path from 'path';
+import fs from 'fs';
+import emailService from '../services/emailService.js';
+import notificationService from '../services/notificationService.js';
 
 // Crear una nueva asignación
 export const createAssignment = async (req, res) => {
