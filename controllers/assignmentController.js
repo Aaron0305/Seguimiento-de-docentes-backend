@@ -98,8 +98,13 @@ export const createAssignment = async (req, res) => {
         await assignment.save();
 
         // Actualizar estadísticas para cada profesor asignado
-        for (const teacherId of assignment.assignedTo) {
-            await TeacherStats.updateTeacherStats(teacherId);
+        try {
+            for (const teacher of teachers) {
+                await TeacherStats.updateTeacherStats(teacher._id);
+            }
+        } catch (statsError) {
+            console.error('Error al actualizar estadísticas:', statsError);
+            // No detenemos el proceso si falla la actualización de estadísticas
         }
 
         // Poblar los datos de los usuarios asignados para la respuesta
