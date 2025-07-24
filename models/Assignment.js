@@ -78,6 +78,22 @@ const assignmentSchema = new mongoose.Schema({
             enum: ['submitted', 'reviewed'],
             default: 'submitted'
         }
+    }],
+    // Nuevo campo: estado de completado por usuario asignado
+    completionStatus: [{
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            required: true
+        },
+        status: {
+            type: String,
+            enum: ['pending', 'completed'],
+            default: 'pending'
+        },
+        completedAt: {
+            type: Date
+        }
     }]
 });
 

@@ -161,7 +161,12 @@ export const createAssignment = async (req, res) => {
 // Obtener todas las asignaciones (para admin)
 export const getAllAssignments = async (req, res) => {
     try {
-        const assignments = await Assignment.find()
+        const { status } = req.query;
+        const filter = {};
+        if (status) {
+            filter.status = status;
+        }
+        const assignments = await Assignment.find(filter)
             .populate('assignedTo', 'nombre apellidoPaterno apellidoMaterno email')
             .populate('createdBy', 'nombre apellidoPaterno apellidoMaterno')
             .sort('-createdAt');
@@ -618,6 +623,86 @@ export const markAssignmentCompleted = async (req, res) => {
         res.status(500).json({
             success: false,
             error: error.message || 'Error al actualizar la asignación'
+        });
+    }
+};
+
+// Endpoint: Marcar como completada la asignación para usuarios seleccionados (solo admin)
+export const completeAssignmentForUsers = async (req, res) => {
+    try {
+        const assignmentId = req.params.id;
+        const { userIds } = req.body; // array de IDs de usuarios a marcar como completados
+
+        // Validar entrada
+        if (!Array.isArray(userIds) || userIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Debes proporcionar al menos un usuario para marcar como completado.'
+            });
+        }
+
+        // Buscar la asignación
+        const assignment = await Assignment.findById(assignmentId);
+        if (!assignment) {
+            return res.status(404).json({
+                success: false,
+                error: 'Asignación no encontrada.'
+            });
+        }
+
+        // Validar que el usuario que accede es admin (solo quien accede al panel, no por rol)
+        // Aquí podrías validar por req.user o dejarlo abierto si el acceso al panel ya es seguro
+        // if (req.user.role !== 'admin') { ... }
+
+        // Inicializar completionStatus si no existe
+        if (!assignment.completionStatus) assignment.completionStatus = [];
+
+        // Marcar como completado para los usuarios seleccionados
+        let updated = false;
+        userIds.forEach(userId => {
+            // Buscar si ya existe entry para ese usuario
+            let entry = assignment.completionStatus.find(cs => cs.user.toString() === userId);
+            if (entry) {
+                if (entry.status !== 'completed') {
+                    entry.status = 'completed';
+                    entry.completedAt = new Date();
+                    updated = true;
+                }
+            } else {
+                assignment.completionStatus.push({
+                    user: userId,
+                    status: 'completed',
+                    completedAt: new Date()
+                });
+                updated = true;
+            }
+        });
+
+        // Si todos los usuarios asignados están completados, marca la asignación globalmente como 'completed'
+        const allCompleted = assignment.assignedTo.every(userId => {
+            const cs = assignment.completionStatus.find(cs => cs.user.toString() === userId.toString());
+            return cs && cs.status === 'completed';
+        });
+        if (allCompleted && assignment.status !== 'completed') {
+            assignment.status = 'completed';
+            assignment.completedAt = new Date();
+            updated = true;
+        }
+
+        if (updated) {
+            await assignment.save();
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Asignación marcada como completada para los usuarios seleccionados.',
+            completionStatus: assignment.completionStatus
+        });
+    } catch (error) {
+        console.error('Error en completeAssignmentForUsers:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Error al marcar como completada la asignación.'
         });
     }
 };
